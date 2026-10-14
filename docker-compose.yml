@@ -1,0 +1,183 @@
+services:
+  redis:
+    image: redis:8.8.3-trixie
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  datadog-agent:
+    image: gcr.io/datadoghq/agent:7
+    environment:
+      DD_API_KEY: ${DD_API_KEY:-}
+      DD_SITE: ${DD_SITE:-datadoghq.com}
+      DD_ENV: ${DD_ENV:-dev}
+      DD_LOGS_ENABLED: "true"
+      DD_APM_ENABLED: "true"
+      DD_OTLP_CONFIG_RECEIVER_PROTOCOLS_HTTP_ENDPOINT: 0.0.0.0:4318
+      DD_OTLP_CONFIG_RECEIVER_PROTOCOLS_GRPC_ENDPOINT: 0.0.0.0:4317
+      DD_OTLP_CONFIG_LOGS_ENABLED: "true"
+      DD_OTLP_CONFIG_TRACES_ENABLED: "true"
+      DD_OTLP_CONFIG_METRICS_ENABLED: "true"
+      DD_APM_NON_LOCAL_TRAFFIC: "true"
+      DD_HOSTNAME: dd-4-pillars-agent
+      # Workaround Agent >=7.61 OTLP crash with /host/proc mount:
+      # "failed to register process metrics: process does not exist"
+      HOST_PROC: /proc
+    volumes:
+      - ./datadog/datadog.yaml:/etc/datadog-agent/datadog.yaml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc/:/host/proc/:ro
+      - /sys/fs/cgroup/:/host/sys/fs/cgroup:ro
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    restart: unless-stopped
+
+  hotel-service:
+    build:
+      context: .
+      args:
+        SERVICE_MODULE: hotel-service
+    environment: &otel-env
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx256m
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://datadog-agent:4318
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      OTEL_METRICS_EXPORTER: otlp
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_LOGS_EXPORTER: otlp
+      OTEL_SERVICE_NAME: hotel-service
+      OTEL_RESOURCE_ATTRIBUTES: deployment.environment=${DD_ENV:-dev},service.version=1.0.0
+      MANAGEMENT_OTLP_METRICS_EXPORT_URL: http://datadog-agent:4318/v1/metrics
+      MANAGEMENT_OTLP_TRACING_ENDPOINT: http://datadog-agent:4318/v1/traces
+    ports:
+      - "8081:8081"
+    mem_limit: 512m
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      datadog-agent:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8081/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+  room-service:
+    build:
+      context: .
+      args:
+        SERVICE_MODULE: room-service
+    environment:
+      <<: *otel-env
+      SERVER_PORT: 8082
+      OTEL_SERVICE_NAME: room-service
+    ports:
+      - "8082:8082"
+    mem_limit: 512m
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      datadog-agent:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8082/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+  booking-service:
+    build:
+      context: .
+      args:
+        SERVICE_MODULE: booking-service
+    environment:
+      <<: *otel-env
+      SERVER_PORT: 8083
+      OTEL_SERVICE_NAME: booking-service
+    ports:
+      - "8083:8083"
+    mem_limit: 512m
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      datadog-agent:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8083/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+  checkin-service:
+    build:
+      context: .
+      args:
+        SERVICE_MODULE: checkin-service
+    environment:
+      <<: *otel-env
+      SERVER_PORT: 8084
+      OTEL_SERVICE_NAME: checkin-service
+      BOOKING_SERVICE_URL: http://booking-service:8083
+    ports:
+      - "8084:8084"
+    mem_limit: 512m
+    restart: unless-stopped
+    depends_on:
+      booking-service:
+        condition: service_healthy
+      datadog-agent:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8084/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+  workflow-service:
+    build:
+      context: .
+      args:
+        SERVICE_MODULE: workflow-service
+    environment:
+      <<: *otel-env
+      SERVER_PORT: 8085
+      OTEL_SERVICE_NAME: workflow-service
+      HOTEL_SERVICE_URL: http://hotel-service:8081
+      ROOM_SERVICE_URL: http://room-service:8082
+      BOOKING_SERVICE_URL: http://booking-service:8083
+      CHECKIN_SERVICE_URL: http://checkin-service:8084
+    ports:
+      - "8085:8085"
+    mem_limit: 512m
+    restart: unless-stopped
+    depends_on:
+      hotel-service:
+        condition: service_healthy
+      room-service:
+        condition: service_healthy
+      booking-service:
+        condition: service_healthy
+      checkin-service:
+        condition: service_healthy
+      datadog-agent:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8085/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s

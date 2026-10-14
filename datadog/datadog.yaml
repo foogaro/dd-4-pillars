@@ -1,0 +1,22 @@
+## Prefer env vars from docker-compose for secrets/site.
+## This file only sets non-secret agent defaults.
+hostname: dd-4-pillars-agent
+tags:
+  - project:dd-4-pillars
+  - stack:hotel-booking
+
+logs_enabled: true
+
+otlp_config:
+  receiver:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+      grpc:
+        endpoint: 0.0.0.0:4317
+  logs:
+    enabled: true
+
+apm_config:
+  enabled: true
+  apm_non_local_traffic: true

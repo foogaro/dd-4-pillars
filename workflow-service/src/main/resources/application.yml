@@ -1,0 +1,22 @@
+spring:
+  application:
+    name: workflow-service
+  config:
+    import: optional:classpath:application-observability.yml,optional:classpath:application-openapi.yml
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+server:
+  port: ${SERVER_PORT:8085}
+
+springdoc:
+  info:
+    description: Book and cancel workflow orchestration API
+
+app:
+  hotel-service-url: ${HOTEL_SERVICE_URL:http://localhost:8081}
+  room-service-url: ${ROOM_SERVICE_URL:http://localhost:8082}
+  booking-service-url: ${BOOKING_SERVICE_URL:http://localhost:8083}
+  checkin-service-url: ${CHECKIN_SERVICE_URL:http://localhost:8084}

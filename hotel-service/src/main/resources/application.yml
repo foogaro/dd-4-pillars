@@ -1,0 +1,22 @@
+spring:
+  application:
+    name: hotel-service
+  config:
+    import: optional:classpath:application-observability.yml,optional:classpath:application-openapi.yml
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+server:
+  port: ${SERVER_PORT:8081}
+
+springdoc:
+  info:
+    description: Hotel CRUD API
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics

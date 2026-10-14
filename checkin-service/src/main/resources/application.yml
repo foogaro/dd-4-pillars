@@ -1,0 +1,19 @@
+spring:
+  application:
+    name: checkin-service
+  config:
+    import: optional:classpath:application-observability.yml,optional:classpath:application-openapi.yml
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+server:
+  port: ${SERVER_PORT:8084}
+
+springdoc:
+  info:
+    description: Check-in and check-out stay API
+
+app:
+  booking-service-url: ${BOOKING_SERVICE_URL:http://localhost:8083}

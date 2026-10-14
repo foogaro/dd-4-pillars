@@ -1,0 +1,11 @@
+**/target
+**/.git
+**/.idea
+**/.vscode
+**/.cursor
+**/agent-transcripts
+**/*.iml
+**/node_modules
+.env
+CLAUDE.md
+README.md
